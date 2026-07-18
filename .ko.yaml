@@ -1,0 +1,10 @@
+# ko build config — daemonless image build (Hard Rule: no dockerd).
+# VERSION is exported by the publish workflow.
+defaultBaseImage: gcr.io/distroless/static-debian12:nonroot
+builds:
+  - id: waker
+    main: .
+    ldflags:
+      - -s
+      - -w
+      - -X main.version={{.Env.VERSION}}

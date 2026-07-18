@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "include-component-in-tag": false,
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "charts/waker/Chart.yaml"
+        },
+        {
+          "type": "generic",
+          "path": "charts/waker/values.yaml"
+        }
+      ]
+    }
+  }
+}

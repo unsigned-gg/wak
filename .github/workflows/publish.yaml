@@ -1,0 +1,103 @@
+name: Publish — image + chart to Harbor
+
+# Runs on the GitHub release cut by release-please. Publishes the ko-built
+# image (Trivy-gated, cosign-signed) and the packaged Helm chart as OCI to
+# Harbor. A release is not a deploy — cluster rollout happens via the
+# consuming platform repo's ArgoCD pin, operator-gated.
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+env:
+  HARBOR_REGISTRY: harbor.dev.unsigned.gg
+  IMAGE_REPOSITORY: unsigned/waker
+  CHART_OCI_REPO: helm-charts
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve version from tag
+        id: params
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          case "${version}" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::tag ${GITHUB_REF_NAME} is not a semver release tag"; exit 1 ;;
+          esac
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: ko-build/setup-ko@v0.9
+
+      - name: Build and push image (ko, daemonless)
+        id: build
+        env:
+          KO_DOCKER_REPO: ${{ env.HARBOR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
+          VERSION: ${{ steps.params.outputs.version }}
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+        run: |
+          printf '%s' "${HARBOR_PASSWORD}" | \
+            ko login "${HARBOR_REGISTRY}" --username "${HARBOR_USERNAME}" --password-stdin
+          digest="$(ko build --bare --tags "${VERSION}" .)"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Trivy scan (blocking — HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          TRIVY_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+        with:
+          image-ref: "${{ env.HARBOR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.params.outputs.version }}"
+          format: "table"
+          severity: "HIGH,CRITICAL"
+          exit-code: "1"
+
+      - uses: sigstore/cosign-installer@v3.7.0
+
+      - name: Sign image (cosign key-based, no public tlog)
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+        run: |
+          printf '%s' "${HARBOR_PASSWORD}" | \
+            cosign login "${HARBOR_REGISTRY}" --username "${HARBOR_USERNAME}" --password-stdin
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY --tlog-upload=false \
+            "${{ steps.build.outputs.digest }}"
+
+      - uses: azure/setup-helm@v5.0.1
+        with:
+          version: v3.16.4
+
+      - name: Package and push chart (OCI)
+        env:
+          VERSION: ${{ steps.params.outputs.version }}
+          HARBOR_USERNAME: ${{ secrets.HARBOR_USERNAME }}
+          HARBOR_PASSWORD: ${{ secrets.HARBOR_PASSWORD }}
+        run: |
+          printf '%s' "${HARBOR_PASSWORD}" | \
+            helm registry login "${HARBOR_REGISTRY}" --username "${HARBOR_USERNAME}" --password-stdin
+          helm package charts/waker --version "${VERSION}" --app-version "${VERSION}"
+          helm push "waker-${VERSION}.tgz" "oci://${HARBOR_REGISTRY}/${CHART_OCI_REPO}"
+
+      - name: Publish summary
+        run: |
+          {
+            echo "### waker ${{ steps.params.outputs.version }} published"
+            echo ""
+            echo "- image: \`${{ steps.build.outputs.digest }}\`"
+            echo "- chart: \`oci://${HARBOR_REGISTRY}/${CHART_OCI_REPO}/waker:${{ steps.params.outputs.version }}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
