@@ -50,7 +50,12 @@ networkPolicy:
   ingressNamespaces:
     - tailscale
     - traefik
-  # Namespace allowed to scrape/probe the health port.
+  # Namespaces allowed to probe the health port (/healthz, /readyz).
+  # Includes the monitoring stack (Prometheus scrape) and the soma operator.
+  probeNamespaces:
+    - monitoring
+    - soma
+  # Namespace allowed to scrape/probe the health port (legacy single-ns alias).
   monitoringNamespace: monitoring
 
 resources:

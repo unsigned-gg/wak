@@ -27,11 +27,14 @@ spec:
         - protocol: TCP
           port: {{ .listenPort }}
         {{- end }}
-    # Prometheus scrape / probes on the health port.
+    # Health probes + Prometheus scrape on the health port (8080).
+    # probeNamespaces lists namespaces that may reach /healthz + /readyz.
     - from:
+        {{- range .Values.networkPolicy.probeNamespaces }}
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace }}
+              kubernetes.io/metadata.name: {{ . }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 8080
