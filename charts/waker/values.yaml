@@ -16,7 +16,7 @@ global:
 image:
   # Published by this repo's release workflow (ko, cosign-signed). Never latest.
   repository: harbor.unsigned.gg/platform/waker
-  tag: "1.0.0" # x-release-please-version
+  tag: "1.0.1" # x-release-please-version
   pullPolicy: IfNotPresent
 
 imagePullSecrets:

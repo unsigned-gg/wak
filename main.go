@@ -424,9 +424,9 @@ func loadConfig(path string) (*Config, time.Duration, error) {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return nil, 0, fmt.Errorf("parse config: %w", err)
 	}
-	if len(cfg.Targets) == 0 {
-		return nil, 0, errors.New("config has no targets")
-	}
+	// Empty targets is allowed: an orchestrator must be deployable before
+	// any consumer exists. main() logs a warning; the reaper + health
+	// server run idle until targets are added (via a redeploy with config).
 	seen := map[int]string{}
 	for i := range cfg.Targets {
 		t := &cfg.Targets[i]
@@ -501,7 +501,9 @@ func main() {
 		}
 	}()
 	w.ready.Store(true)
-	log.Info("waker up", "version", version, "targets", len(w.targets), "defaultIdle", defaultIdle.String())
+	if len(w.targets) == 0 {
+		log.Warn("no targets configured — running idle; reaper + health server active until targets are added")
+	}
 
 	<-ctx.Done()
 	w.ready.Store(false)

@@ -87,10 +87,13 @@ func TestLoadConfigRejectsDuplicateListenPorts(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsEmptyTargets(t *testing.T) {
-	_, _, err := loadConfig(writeConfig(t, `{"targets": []}`))
-	if err == nil {
-		t.Fatal("empty targets accepted, want error")
+func TestLoadConfigAcceptsEmptyTargets(t *testing.T) {
+	cfg, _, err := loadConfig(writeConfig(t, `{"targets": []}`))
+	if err != nil {
+		t.Fatalf("empty targets rejected, want accepted: %v", err)
+	}
+	if len(cfg.Targets) != 0 {
+		t.Fatalf("targets = %d, want 0", len(cfg.Targets))
 	}
 }
 
