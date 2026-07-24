@@ -1,0 +1,75 @@
+# ArgoCD Application — waker deploy (manual sync, platform norm for new apps)
+#
+# Standalone Application (NOT an appset element): waker is not adopted into the
+# unsigned-paas appset and carries its own Harbor pull secret. Mirrors the
+# blackwall bootstrap pattern (deploy/gitops/blackwall-app.yaml).
+#
+# SOURCE = this git repo's chart path (NOT Harbor OCI) because the OCI chart
+# publish is not yet wired. The chart renders the Deployment, Service, config
+# ConfigMap, RBAC (per-target-namespace Roles), NetworkPolicy, PDB, and an
+# optional ExternalSecret for the Harbor pull robot.
+#
+# IMAGE: harbor.unsigned.gg/platform/waker:<tag>. The image is ko-built +
+# (eventually) cosign-signed. Pin by tag here; operator may switch to
+#SHA-pinned (digest) form after the central sign-by-digest step
+#(unsigned-paas-cosign, --tlog-upload=false). Kyverno verify-image-signatures
+#is in Audit mode, so an unsigned image does NOT block deploy.
+#
+# Manual sync: no automated/selfHeal — operator triggers after image + chart
+# land. NOT applied by this session (coordinator does all cluster writes).
+#
+# Prerequisites (operator-gated, coordinator-provisioned):
+#   - Secret `waker-harbor-pull` — Harbor pull credentials (robot$<pull-scope>
+#     with pull on platform/waker). The chart's pullSecret ExternalSecret can
+#     materialize this from OpenBao if enabled (see values.pullSecret).
+#   - Each target workload's Service repointed at this waker's listener ports.
+#   - Each target workload annotated `unsigned.gg/wake-enabled: "true"` to opt
+#     into idle reaping (the wake path works regardless; reaping is opt-in).
+#   - `targets` MUST be set in valuesObject — the waker exits on empty targets.
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: waker
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: unsigned-paas
+    app.kubernetes.io/component: applications
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: unsigned-paas
+  source:
+    repoURL: git@github.com:unsigned-gg/waker.git
+    targetRevision: main
+    path: charts/waker
+    helm:
+      valuesObject:
+        fullnameOverride: waker
+        # Image: ko-built, target harbor.unsigned.gg/platform/waker.
+        # Tag tracks the release-please version (Chart.yaml appVersion).
+        # Operator: replace with a digest pin (@sha256:...) after the central
+        # BuildKit publish + sign-by-digest lands.
+        image:
+          repository: harbor.unsigned.gg/platform/waker
+          tag: "0.2.0"
+        # Harbor pull secret (coordinator provisions; or enable the chart's
+        # ExternalSecret pullSecret.create + OpenBao remoteKey).
+        imagePullSecrets:
+          - name: waker-harbor-pull
+        # REQUIRED: one entry per wake target. Empty list → waker exits.
+        # Example (fill per deployment):
+        # targets:
+        #   - name: aria
+        #     namespace: aria-vm
+        #     workload: aria-vm            # StatefulSet (default kind)
+        #     listenPort: 10023
+        #     targetPort: 22
+        targets: []
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: waker
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
