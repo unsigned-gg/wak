@@ -1,0 +1,61 @@
+# Per-target-namespace Roles: exactly the verbs the waker's REST client
+# uses — workload get (annotations) + workload/scale get/patch + pod
+# discovery. No wildcards; nothing cluster-scoped.
+#
+# StatefulSet targets address the ordinal pod by name, so `pods get` is
+# resourceName-scoped. Deployment targets discover pods by label selector,
+# which requires an unscoped `pods list` in the target namespace (list
+# cannot be resourceName-scoped in Kubernetes RBAC).
+{{- range .Values.targets }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: waker
+  namespace: {{ .namespace }}
+  labels:
+    {{- include "waker.labels" $ | nindent 4 }}
+rules:
+{{- if eq (default "statefulset" .kind) "deployment" }}
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["{{ .workload }}"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    resourceNames: ["{{ .workload }}"]
+    verbs: ["get", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+{{- else }}
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    resourceNames: ["{{ .workload }}"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets/scale"]
+    resourceNames: ["{{ .workload }}"]
+    verbs: ["get", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    resourceNames: ["{{ .workload }}-0"]
+    verbs: ["get"]
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: waker
+  namespace: {{ .namespace }}
+  labels:
+    {{- include "waker.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: waker
+subjects:
+  - kind: ServiceAccount
+    name: waker
+    namespace: {{ $.Release.Namespace }}
+{{- end }}

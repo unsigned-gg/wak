@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: waker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "waker.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "waker.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Wake traffic arrives via each target's (repointed) Service — sources
+    # are the configured edge namespaces. Health checks come from the
+    # kubelet (host network, not policy-relevant on Cilium).
+    - from:
+        {{- range .Values.networkPolicy.ingressNamespaces }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . }}
+        {{- end }}
+      ports:
+        {{- range .Values.targets }}
+        - protocol: TCP
+          port: {{ .listenPort }}
+        {{- end }}
+    # Prometheus scrape / probes on the health port.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.monitoringNamespace }}
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Backend TCP port in each target namespace.
+    {{- range .Values.targets }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+      ports:
+        - protocol: TCP
+          port: {{ .targetPort }}
+    {{- end }}
+    # kube-apiserver (scale/pod reads) — node IPs + service VIP on 443/6443.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: 443

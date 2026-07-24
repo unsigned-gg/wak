@@ -1,0 +1,77 @@
+# -----------------------------------------------------------------------------
+# waker — accept-and-hold TCP wake proxy + idle reaper (scale-to-zero
+# activator). Founding consumer: engineer Firecracker microVMs (OPS-670).
+# -----------------------------------------------------------------------------
+# Safety model: listing a target here only opens a listener — nothing changes
+# for a workload until (a) its Service is repointed at this waker AND (b) the
+# workload carries unsigned.gg/wake-enabled: "true" (the reaper acts only on
+# that annotation; the wake path works regardless once traffic arrives).
+
+global:
+  # app.kubernetes.io/part-of label; deployments override to their platform.
+  project: waker
+  owner: platform-team
+  costCenter: engineering
+
+image:
+  # Published by this repo's release workflow (ko, cosign-signed). Never latest.
+  repository: harbor.unsigned.gg/platform/waker
+  tag: "1.0.0" # x-release-please-version
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: harbor-pull
+
+# Optional ESO-materialized registry pull robot. Disabled by default; a
+# deployment enables it and points remoteKey/property at its secret store.
+pullSecret:
+  create: false
+  storeName: vault-openbao
+  remoteKey: waker
+  property: harbor-pull-dockerconfigjson
+
+replicaCount: 1
+
+idleTimeoutDefault: "45m"
+
+# One listener per target. REQUIRED at install time — the waker exits when
+# the list is empty. Fields:
+#   name        display name; also the Service port suffix (keep <= 13 chars)
+#   namespace   workload namespace
+#   kind        statefulset (default) | deployment
+#   workload    StatefulSet/Deployment object name
+#   selector    pod label selector — REQUIRED for deployment targets
+#   listenPort  waker-local port
+#   targetPort  backend TCP port on the pod
+targets: []
+
+networkPolicy:
+  # Namespaces allowed to reach the wake listeners.
+  ingressNamespaces:
+    - tailscale
+    - traefik
+  # Namespace allowed to scrape/probe the health port.
+  monitoringNamespace: monitoring
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+priorityClassName: platform-medium
+
+podDisruptionBudget:
+  enabled: true
+  # Single-replica data-path component: allow the one pod to move during
+  # drains (blocking drains on a 1-replica deployment would wedge nodes).
+  maxUnavailable: 1
+
+# --- Sidecar toggles ---
+sidecars:
+  oauth2-proxy:
+    enabled: false
+  jaeger-agent:
+    enabled: false

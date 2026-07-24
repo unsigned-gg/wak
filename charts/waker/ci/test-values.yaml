@@ -1,0 +1,16 @@
+# Lint/template fixture exercising both target kinds. Not deploy values.
+targets:
+  - name: aria
+    namespace: aria-vm
+    workload: aria-vm
+    listenPort: 10023
+    targetPort: 22
+  - name: web
+    namespace: web-app
+    kind: deployment
+    workload: web
+    selector: "app.kubernetes.io/name=web"
+    listenPort: 10100
+    targetPort: 8080
+pullSecret:
+  create: true

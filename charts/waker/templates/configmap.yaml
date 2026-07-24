@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: waker-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "waker.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {{ dict "targets" .Values.targets "idleTimeoutDefault" .Values.idleTimeoutDefault | toJson }}

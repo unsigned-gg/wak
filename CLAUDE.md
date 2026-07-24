@@ -30,7 +30,8 @@ helm template waker charts/waker -f charts/waker/ci/test-values.yaml
 
 ## Deploy path
 
-Release here → image `harbor.dev.unsigned.gg/unsigned/waker` + OCI chart
-`harbor.dev.unsigned.gg/helm-charts/waker`. unsigned-paas consumes the chart
-via `gitops/argocd-apps/waker-app.yaml` (targets + image pin live THERE, in
-`valuesObject`). A release is not a deploy; ArgoCD sync is operator-gated.
+Release here → image `harbor.unsigned.gg/platform/waker` + OCI chart
+`harbor.unsigned.gg/helm-charts/waker`. deployed via
+`deploy/gitops/waker-app.yaml` (this repo's ArgoCD Application; targets +
+image pin live in `valuesObject`). A release is not a deploy; ArgoCD sync is
+operator-gated.

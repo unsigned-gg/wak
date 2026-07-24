@@ -47,9 +47,9 @@ the waker and it opts into reaping via the annotation.
 
 ## Chart
 
-`charts/waker` — published as OCI to `harbor.dev.unsigned.gg/helm-charts` by
+`charts/waker` — published as OCI to `harbor.unsigned.gg/helm-charts` by
 the release workflow, alongside the ko-built, cosign-signed image
-`harbor.dev.unsigned.gg/unsigned/waker`. Deployments set `targets` (and RBAC
+`harbor.unsigned.gg/platform/waker`. Deployments set `targets` (and RBAC
 follows: per-target-namespace Roles, no wildcards, nothing cluster-scoped).
 
 ## Development
