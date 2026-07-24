@@ -13,6 +13,7 @@ spec:
     - Ingress
     - Egress
   ingress:
+    {{- if .Values.targets }}
     # Wake traffic arrives via each target's (repointed) Service — sources
     # are the configured edge namespaces. Health checks come from the
     # kubelet (host network, not policy-relevant on Cilium).
@@ -27,6 +28,7 @@ spec:
         - protocol: TCP
           port: {{ .listenPort }}
         {{- end }}
+    {{- end }}
     # Health probes + Prometheus scrape on the health port (8080).
     # probeNamespaces lists namespaces that may reach /healthz + /readyz.
     - from:
