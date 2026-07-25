@@ -13,8 +13,10 @@ spec:
     - name: health
       port: 8080
       targetPort: health
+    {{- if .Values.targets }}
     {{- range .Values.targets }}
     - name: t-{{ .name }}
       port: {{ .listenPort }}
       targetPort: t-{{ .name }}
+    {{- end }}
     {{- end }}
