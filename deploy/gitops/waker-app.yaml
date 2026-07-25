@@ -52,7 +52,7 @@ spec:
         # BuildKit publish + sign-by-digest lands.
         image:
           repository: harbor.unsigned.gg/platform/waker
-          tag: "v1.0.1"
+          tag: "v1.1.0"
         # Harbor pull secret (coordinator provisions; or enable the chart's
         # ExternalSecret pullSecret.create + OpenBao remoteKey).
         imagePullSecrets:

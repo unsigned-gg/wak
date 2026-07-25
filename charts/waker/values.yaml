@@ -16,7 +16,7 @@ global:
 image:
   # Published by this repo's release workflow (ko, cosign-signed). Never latest.
   repository: harbor.unsigned.gg/platform/waker
-  tag: "1.0.1" # x-release-please-version
+  tag: "1.1.0" # x-release-please-version
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
@@ -80,3 +80,13 @@ sidecars:
     enabled: false
   jaeger-agent:
     enabled: false
+
+
+# --- OTLP tracing ---
+# Exports spans to alloy-gateway (OTLP gRPC :4317) in the monitoring ns.
+# The health server accepts and propagates inbound traceparent headers so
+# probes from the soma-operator or monitoring continue a trace rather than
+# creating orphan spans. Disable for local dev: tracing.enabled: false.
+tracing:
+  enabled: true
+  endpoint: "alloy-gateway.monitoring.svc:4317"

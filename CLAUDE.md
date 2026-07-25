@@ -5,10 +5,12 @@ reaper). See README.md for behavior and config.
 
 ## Hard rules
 
-- Stdlib-only Go — no client-go, no external modules. The Kubernetes REST
-  client stays minimal and must match the chart's Role verbs exactly
+- Go stdlib for the Kubernetes REST client — no client-go. The REST client
+  stays minimal and must match the chart's Role verbs exactly
   (`charts/waker/templates/rbac.yaml`); a new API call requires updating
-  both in the same commit.
+  both in the same commit. OpenTelemetry (`go.opentelemetry.io/*`) is the
+  sole permitted external dependency, for OTLP tracing export to
+  alloy-gateway. No other external modules.
 - kebab-case filenames. No `latest` image tags. Images pinned.
 - Daemonless builds only: `ko` (see `.ko.yaml`). No Dockerfile, no dockerd.
 - Signed commits. PR-required — never push to main.

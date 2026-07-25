@@ -42,6 +42,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // version is stamped by the build (-ldflags -X main.version=...).
@@ -274,19 +276,30 @@ type waker struct {
 // ensureUp scales the target to 1 if needed and waits until its backend
 // accepts a TCP dial. Returns the dialable address.
 func (w *waker) ensureUp(ctx context.Context, s *targetState) (string, error) {
+	ctx, span := startSpan(ctx, "waker.ensure_up")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("target.name", s.cfg.Name),
+		attribute.String("target.kind", s.cfg.Kind),
+	)
+
 	replicas, err := w.kube.getScale(ctx, &s.cfg)
 	if err != nil {
+		span.RecordError(err)
 		return "", fmt.Errorf("get scale: %w", err)
 	}
+	span.SetAttributes(attribute.Int("replicas.before", replicas))
 	if replicas < 1 {
 		w.log.Info("waking target", "target", s.cfg.Name)
 		if err := w.kube.setScale(ctx, &s.cfg, 1); err != nil {
+			span.RecordError(err)
 			return "", fmt.Errorf("scale up: %w", err)
 		}
 	}
 	deadline := time.Now().Add(wakeDialCap)
 	for time.Now().Before(deadline) {
 		if ctx.Err() != nil {
+			span.RecordError(ctx.Err())
 			return "", ctx.Err()
 		}
 		ip, ready, err := w.kube.podEndpoint(ctx, &s.cfg)
@@ -295,16 +308,29 @@ func (w *waker) ensureUp(ctx context.Context, s *targetState) (string, error) {
 			d := net.Dialer{Timeout: 3 * time.Second}
 			if c, err := d.DialContext(ctx, "tcp", addr); err == nil {
 				c.Close()
+				span.SetAttributes(
+					attribute.Bool("target.ready", true),
+					attribute.String("target.address", addr),
+				)
 				return addr, nil
 			}
 		}
 		time.Sleep(2 * time.Second)
 	}
 	// Deliberately leave the workload scaled up for inspection.
-	return "", fmt.Errorf("target %s: not dialable within %s (workload left at 1)", s.cfg.Name, wakeDialCap)
+	errTimeout := fmt.Errorf("target %s: not dialable within %s (workload left at 1)", s.cfg.Name, wakeDialCap)
+	span.RecordError(errTimeout)
+	span.SetAttributes(attribute.Bool("target.ready", false))
+	return "", errTimeout
 }
 
 func (w *waker) handleConn(ctx context.Context, s *targetState, client net.Conn) {
+	ctx, span := startSpan(ctx, "waker.session")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("target.name", s.cfg.Name),
+		attribute.String("client.remote_addr", client.RemoteAddr().String()),
+	)
 	defer client.Close()
 	s.active.Add(1)
 	s.touch()
@@ -315,11 +341,13 @@ func (w *waker) handleConn(ctx context.Context, s *targetState, client net.Conn)
 
 	addr, err := w.ensureUp(ctx, s)
 	if err != nil {
+		span.RecordError(err)
 		w.log.Error("wake failed", "target", s.cfg.Name, "err", err)
 		return
 	}
 	backend, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
+		span.RecordError(err)
 		w.log.Error("backend dial failed", "target", s.cfg.Name, "addr", addr, "err", err)
 		return
 	}
@@ -367,12 +395,19 @@ func (w *waker) listen(ctx context.Context, s *targetState) error {
 // reapOnce scales down every opted-in target whose idle clock has expired.
 func (w *waker) reapOnce(ctx context.Context) {
 	for _, s := range w.targets {
+		ctx, span := startSpan(ctx, "waker.reap")
+		span.SetAttributes(attribute.String("target.name", s.cfg.Name))
+
 		ann, err := w.kube.workloadAnnotations(ctx, &s.cfg)
 		if err != nil {
+			span.RecordError(err)
 			w.log.Error("annotation read failed", "target", s.cfg.Name, "err", err)
+			span.End()
 			continue
 		}
 		if ann[wakeEnabledAnn] != "true" {
+			span.SetAttributes(attribute.Bool("reap.enabled", false))
+			span.End()
 			continue // opted out — never reap
 		}
 		idle := w.defaultIdle
@@ -384,31 +419,44 @@ func (w *waker) reapOnce(ctx context.Context) {
 			}
 		}
 		if s.idleFor() < idle {
+			span.SetAttributes(
+				attribute.Bool("reap.idle_expired", false),
+				attribute.String("reap.idle_for", fmtDuration(s.idleFor())),
+			)
+			span.End()
 			continue
 		}
 		replicas, err := w.kube.getScale(ctx, &s.cfg)
 		if err != nil || replicas == 0 {
+			span.End()
 			continue
 		}
+		span.SetAttributes(
+			attribute.Bool("reap.idle_expired", true),
+			attribute.String("reap.idle_for", fmtDuration(s.idleFor())),
+			attribute.Bool("reap.scaled_down", true),
+		)
 		w.log.Info("reaping idle target", "target", s.cfg.Name, "idle", s.idleFor().Round(time.Second).String())
 		if err := w.kube.setScale(ctx, &s.cfg, 0); err != nil {
+			span.RecordError(err)
 			w.log.Error("scale down failed", "target", s.cfg.Name, "err", err)
 		}
+		span.End()
 	}
 }
 
 func (w *waker) health(addr string) *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(rw http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/healthz", tracingMiddleware("waker.health_check", func(rw http.ResponseWriter, _ *http.Request) {
 		rw.WriteHeader(http.StatusOK)
-	})
-	mux.HandleFunc("/readyz", func(rw http.ResponseWriter, _ *http.Request) {
+	}))
+	mux.HandleFunc("/readyz", tracingMiddleware("waker.ready_check", func(rw http.ResponseWriter, _ *http.Request) {
 		if w.ready.Load() {
 			rw.WriteHeader(http.StatusOK)
 			return
 		}
 		rw.WriteHeader(http.StatusServiceUnavailable)
-	})
+	}))
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go srv.ListenAndServe() //nolint:errcheck // fatal-path surfaces via readiness
 	return srv
@@ -476,6 +524,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// OTLP tracing — exporter to alloy-gateway (monitoring ns). Graceful
+	// shutdown flushes the batch span processor before exit.
+	shutdownTracer := initTracer(ctx, log)
+
 	srv := w.health(":8080")
 	var wg sync.WaitGroup
 	for _, s := range w.targets {
@@ -511,4 +563,5 @@ func main() {
 	defer cancel()
 	srv.Shutdown(shutdownCtx) //nolint:errcheck
 	wg.Wait()
+	shutdownTracer(shutdownCtx) //nolint:errcheck // flush traces before exit
 }

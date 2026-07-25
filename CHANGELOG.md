@@ -5,6 +5,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-24
+
+### Added
+
+- OTLP distributed tracing via `go.opentelemetry.io/otel` — exports spans to
+  `alloy-gateway.monitoring.svc:4317` (OTLP gRPC). Service name `waker`,
+  resource attributes include service version. Tracing can be disabled via
+  `OTEL_TRACES_ENABLED=false`.
+- Spans on the critical path: `waker.session` (root, per TCP connection),
+  `waker.ensure_up` (scale-to-ready cycle), `waker.reap` (per-target idle
+  reaping). Each carries target name, kind, replica count, readiness, idle
+  duration, and error attributes.
+- Traceparent propagation on health endpoints: `/healthz` and `/readyz`
+  extract inbound `traceparent` headers so probes from the soma-operator or
+  monitoring continue a trace rather than creating orphan spans.
+- Chart `tracing` values block: `tracing.enabled` (default true),
+  `tracing.endpoint` (default `alloy-gateway.monitoring.svc:4317`). Renders
+  `OTEL_TRACES_ENABLED` + `OTEL_EXPORTER_OTLP_ENDPOINT` env vars.
+
+### Changed
+
+- CLAUDE.md: stdlib-only rule relaxed — `go.opentelemetry.io/*` is now the
+  sole permitted external dependency (for OTLP tracing). K8s REST client
+  remains stdlib-only.
+
 ## [1.0.1] - 2026-07-24
 
 ### Changed
