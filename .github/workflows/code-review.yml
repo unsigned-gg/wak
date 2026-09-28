@@ -18,7 +18,7 @@ permissions:
 jobs:
   review:
     name: GLM-5.2 code review
-    runs-on: ${{ github.repository_owner == 'cerebral-work' && 'reverie' || 'reverie-ug' }}
+    runs-on: reverie
     timeout-minutes: 10
     if: github.event.pull_request.draft == false
 
