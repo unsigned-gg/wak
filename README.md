@@ -1,9 +1,9 @@
-# waker
+# wak (waker)
 
-Accept-and-hold TCP wake proxy + idle reaper: a scale-to-zero activator for
-Kubernetes StatefulSets and Deployments reached over raw TCP. Founding
-consumer: the engineer Firecracker microVMs on the unsigned platform
-(OPS-670 — spec history in `unsigned-paas/docs/specs/engineer-vm-ssh-wake-autoscaler.md`).
+> Accept-and-hold TCP wake proxy + idle reaper: a scale-to-zero activator for
+> Kubernetes StatefulSets and Deployments reached over raw TCP. Part of the `unsigned` 3-letter systems matrix.
+> Founding consumer: engineer Firecracker microVMs on the unsigned platform (`unsigned-paas`).
+
 
 ## How it works
 
