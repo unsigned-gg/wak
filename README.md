@@ -1,5 +1,7 @@
 # wak (waker)
 
+[![License: CC0-1.0](https://img.shields.io/badge/license-CC0--1.0-blue.svg)](LICENSE)
+
 > Accept-and-hold TCP wake proxy + idle reaper: a scale-to-zero activator for
 > Kubernetes StatefulSets and Deployments reached over raw TCP. Part of the `unsigned` 3-letter systems matrix.
 > Founding consumer: engineer Firecracker microVMs on the unsigned platform (`unsigned-paas`).
@@ -62,3 +64,9 @@ helm lint charts/waker -f charts/waker/ci/test-values.yaml
 Releases: Conventional Commits → release-please → tag → publish workflow.
 A release is not a deploy — cluster rollout is the consuming platform
 repo's ArgoCD pin, operator-gated.
+
+## License
+
+Dedicated to the public domain under [CC0 1.0 Universal](LICENSE).
+
+This repository follows the unsigned constitution: [Privacy, Freedom, Dignity](https://github.com/unsigned-gg/.github/blob/main/PRIVACY_FREEDOM_DIGNITY.md) · [Guiding Principles](https://github.com/unsigned-gg/.github/blob/main/GUIDING_PRINCIPLES.md) · [Community Standards](https://github.com/unsigned-gg/.github/blob/main/COMMUNITY_STANDARDS.md) · [Brand Voice](https://github.com/unsigned-gg/.github/blob/main/BRAND_VOICE.md).
