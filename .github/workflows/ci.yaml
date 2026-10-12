@@ -18,9 +18,25 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Verify formatting (gofmt)
+        run: |
+          unformatted="$(gofmt -s -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "Unformatted files detected:"
+            echo "$unformatted"
+            exit 1
+          fi
       - run: go vet ./...
-      - run: go test ./...
-      - run: CGO_ENABLED=0 go build -trimpath .
+      - name: Run unit tests with race detector
+        run: go test -race -v ./...
+      - name: Build static binary
+        run: CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /tmp/waker .
+      - name: Verify static linkage
+        run: |
+          file /tmp/waker | grep -q 'statically linked' || {
+            echo "Binary is not statically linked"
+            exit 1
+          }
 
   chart:
     name: Helm lint + template
