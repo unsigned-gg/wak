@@ -1,3 +1,6 @@
 /waker
 *.tgz
 .blackwall/
+
+# Lane persona (lane-persona, ephemeral)
+.agents/persona.md
