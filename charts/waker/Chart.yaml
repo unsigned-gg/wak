@@ -2,5 +2,5 @@ apiVersion: v2
 name: waker
 description: Accept-and-hold TCP wake proxy + idle reaper — scale-to-zero activator for StatefulSets and Deployments
 type: application
-version: 1.1.0 # x-release-please-version
-appVersion: "1.1.0" # x-release-please-version
+version: 1.2.0 # x-release-please-version
+appVersion: "1.2.0" # x-release-please-version
