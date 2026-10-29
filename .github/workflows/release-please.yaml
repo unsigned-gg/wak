@@ -12,8 +12,22 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    # The release App key is admitted only to jobs in the `release` Environment, whose branch policy
+    # is main: a push to main passes and a job run from a PR ref is refused. deployment: false
+    # records no deployment.
+    environment: {name: release, deployment: false}
     steps:
+      # The unsigned-gg org does not let GITHUB_TOKEN open PRs, so release-please acts
+      # as the org release-bot App. An App-opened release PR also triggers CI.
+      # This repository is public, so it cannot use the org's vendored copy in the internal
+      # unsigned-gg/actions repository; it pins the same upstream commit that copy was taken from.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
       - uses: googleapis/release-please-action@v4
         with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
